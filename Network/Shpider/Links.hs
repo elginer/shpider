@@ -11,12 +11,12 @@ import Text.HTML.TagSoup.Parsec
 import Network.Shpider.TextUtils
 
 -- | Parse all links from a list of tags.
-gatherLinks :: [ Tag ] -> [ Link ]
+gatherLinks :: [ Tag String ] -> [ Link ]
 gatherLinks =
    tParse allLinks
 
 -- | The parser responsible for getting all the links.
-allLinks :: TagParser [ Link ]
+allLinks :: TagParser String [ Link ]
 allLinks = do
    ls <- allWholeTags "a"
    return $ toLinks ls

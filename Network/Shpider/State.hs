@@ -65,7 +65,7 @@ initialSt =
 data Page =
    Page { links :: [ Link ]
         , forms :: [ Form ]
-        , tags :: [ Tag ]
+        , tags :: [ Tag String ]
         , source :: String
         , addr :: String
         }

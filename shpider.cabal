@@ -1,5 +1,5 @@
 Name:               shpider 
-Version:            0.0.7
+Version:            0.1.0
 Synopsis:           Web automation library in Haskell.
 Description:
     Shpider is a web automation library for Haskell.   It allows you to quickly write crawlers, and for simple cases ( like following links ) even without reading the page source.
@@ -23,7 +23,7 @@ License:            BSD3
 License-file:       LICENSE
 Author:             Johnny Morrice
 Maintainer:         Johnny Morrice <spoon@killersmurf.com>
-Homepage:          http://www.killersmurf.com/projects/shpider
+Homepage:           http://github.com/elginer/shpider
 Build-type:         Configure
 Cabal-version:      >= 1.2.0
 Extra-source-files: LICENSE.CURL, configure, configure.ac, curl.buildinfo.in

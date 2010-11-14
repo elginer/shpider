@@ -56,17 +56,17 @@ mkForm a m ps =
         }
 
 -- | Gets all forms from a list of tags.
-gatherForms :: [ Tag ] -> [ Form ]
+gatherForms :: [ Tag String ] -> [ Form ]
 gatherForms =
    tParse allForms
 
 -- | The `TagParser` which parses all forms.
-allForms :: TagParser [ Form ]
+allForms :: TagParser String [ Form ]
 allForms = do
    fs <- allWholeTags "form"
    return $ mapMaybe toForm fs
 
-toForm :: WholeTag -> Maybe Form
+toForm :: WholeTag String -> Maybe Form
 toForm ( TagOpen _ attrs , innerTags , _ ) = do
    m <- methodLookup attrs
    a <- attrLookup "action" attrs
