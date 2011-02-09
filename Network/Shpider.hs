@@ -74,6 +74,8 @@ import Network.Shpider.Options
 import Network.Shpider.Forms
 import Network.Shpider.Links
 
+import Web.Encodings
+
 -- | if `keepTrack` has been set, then haveVisited will return `True` if the given URL has been visited.
 haveVisited :: String -> Shpider Bool
 haveVisited uncleanUrl = do
@@ -135,8 +137,13 @@ mkRes url ( curlCode , html ) = do
 
 curlDownloadPost url fields = do
    shpider <- get
-   res <- liftIO $ curlGetString url $ CurlPostFields ( map toPostField fields ) : curlOpts shpider
+   res <- liftIO $ curlGetString url $ opts shpider
    mkRes url res
+   where
+    opts sh = 
+      [ CurlPostFields (map toPostField fields)
+      , CurlPost True
+      ] ++ curlOpts sh
 
 
 curlDownloadHead urlStr = do
@@ -239,7 +246,7 @@ sendForm form = do
          mabsAddr
    
 toPostField ( name , value ) =
-   name ++ "=" ++ value
+   encodeUrl name ++ "=" ++ encodeUrl value
 
 -- | Return the links on the current page.
 currentLinks :: Shpider [ Link ]

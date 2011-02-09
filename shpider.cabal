@@ -29,11 +29,21 @@ Cabal-version:      >= 1.2.0
 Extra-source-files: LICENSE.CURL, configure, configure.ac, curl.buildinfo.in
 
 Library
-   Build-depends:   base < 5, regex-posix , tagsoup-parsec , url>=2 , containers , tagsoup , mtl , bytestring
+   Build-depends:   
+      base < 5
+    , regex-posix 
+    , tagsoup-parsec 
+    , url>=2 
+    , containers 
+    , tagsoup 
+    , mtl 
+    , bytestring
+    , web-encodings
    Exposed-modules: Network.Shpider.URL
                     Network.Shpider.Code
                     Network.Shpider.State
                     Network.Shpider.Options
+                    Network.Shpider.Curl.Opts
                     Network.Shpider.Links
                     Network.Shpider.Forms
                     Network.Shpider.Pairs
@@ -41,7 +51,6 @@ Library
    Other-modules:   Network.Shpider.TextUtils
                     Network.Shpider.Curl.Curl
                     Network.Shpider.Curl.Types
-                    Network.Shpider.Curl.Opts
                     Network.Shpider.Curl.Code
                     Network.Shpider.Curl.Info
                     Network.Shpider.Curl.Post
