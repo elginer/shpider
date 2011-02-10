@@ -60,6 +60,7 @@ module Network.Shpider
    , getLinksByTextRegex
    , getLinksByAddressRegex
    , getFormsByAction
+   , getFormsByRegex
    , currentLinks
    , currentForms
    , parsePage
@@ -296,6 +297,12 @@ getFormsByAction a = do
    maybe ( return [ ] )
          ( \ url -> fmap (filter $ (==) url . action) currentForms )
          murl
+
+-- | Get all forms whose action matches this regex.
+getFormsByRegex :: String -> Shpider [ Form ]
+getFormsByRegex r = do
+	frs <- currentForms
+	return $ filter ( flip (=~) r . action) frs
 
 -- | Get all links whose address matches this regex.
 getLinksByAddressRegex :: String -> Shpider [ Link ]
