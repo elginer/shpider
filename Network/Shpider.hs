@@ -29,12 +29,25 @@
 -- It allows you to quickly write crawlers, and for simple cases even without reading the page source eg.
 --
 -- @
--- `runShpider` $ do
---    `download` \"http:\/\/hackage.haskell.org\/packages\/archive\/pkg-list.html\"
---    l : _ <- `getLinksByText` \"shpider\"
---    `download` $ linkAddress l
+--
+-- #!/usr/bin/env runhaskell
+--
+-- module ShpiderTest where
+--
+-- import Network.Shpider hiding (get)
+-- import Network.Shpider.Curl.Opts
+--
+-- main = do
+--  (result, page) <- `runShpiderWithOptions` [CurlUserAgent \"Windows Mozilla\"] $ do
+--    `download` \"http://browser.yellosoft.us/text.php\"
+--
+--  case result of
+--    Ok -> putStrLn \"Ok\"
+--    _ -> putStrLn \"Error\"
+--
+--  putStrLn $ `source` page
 -- @
-module Network.Shpider 
+module Network.Shpider
    ( module Network.Shpider.Code
    , module Network.Shpider.State
    , module Network.Shpider.URL

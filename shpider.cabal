@@ -1,5 +1,5 @@
-Name:               shpider 
-Version:            0.1.1
+Name:               shpider
+Version:            0.1.2
 Synopsis:           Web automation library in Haskell.
 Description:
     Shpider is a web automation library for Haskell.   It allows you to quickly write crawlers, and for simple cases ( like following links ) even without reading the page source.
@@ -10,20 +10,30 @@ Description:
     .
     An example:
     .
-    > runShpider $ do
-    >      download "http://apage.com"
-    >      theForm : _ <- getFormsByAction "http://anotherpage.com"
-    >      sendForm $ fillOutForm theForm $ pairs $ do
-    >            "occupation" =: "unemployed Haskell programmer"
-    >            "location" =: "mother's house"
+	> #!/usr/bin/env runhaskell
+	>
+	> module ShpiderTest where
+	>
+	> import Network.Shpider hiding (get)
+	> import Network.Shpider.Curl.Opts
+	>
+	> main = do
+	>   (result, page) <- runShpiderWithOptions [CurlUserAgent "Windows Mozilla"] $ do
+	>     download "http://browser.yellosoft.us/text.php"
+	>
+	>   case result of
+	>     Ok -> putStrLn "Ok"
+	>     _ -> putStrLn "Error"
+	>
+	>   putStrLn $ source page
     .
     Shpider contains a patched version of the curl package ( the original package's garbage-collection caused non-deterministic behaviour ).  The curl licence is therefore distributed with this package.
 Category:           Web
 License:            BSD3
 License-file:       LICENSE
-Author:             Johnny Morrice
-Maintainer:         Johnny Morrice <spoon@killersmurf.com>
-Homepage:           http://github.com/elginer/shpider
+Author:             Andrew Pennebaker
+Maintainer:         Andrew Pennebaker <andrew.pennebaker@gmail.com>
+Homepage:           http://github.com/mcandre/shpider
 Build-type:         Configure
 Cabal-version:      >= 1.2.0
 Extra-source-files: LICENSE.CURL, configure, configure.ac, curl.buildinfo.in
@@ -38,7 +48,7 @@ Library
                     Network.Shpider.Forms
                     Network.Shpider.Pairs
                     Network.Shpider
-   Other-modules:   Network.Shpider.TextUtils
+                    Network.Shpider.TextUtils
                     Network.Shpider.Curl.Curl
                     Network.Shpider.Curl.Types
                     Network.Shpider.Curl.Opts
@@ -47,6 +57,6 @@ Library
                     Network.Shpider.Curl.Post
                     Network.Shpider.Curl.Debug
                     Network.Shpider.Curl.Easy
-   
+
    c-sources: curlc.c
    Extra-libraries: curl
