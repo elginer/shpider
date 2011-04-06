@@ -9,21 +9,21 @@ It has useful features such as turning relative links from a page into absolute 
 
 It also provides a nice syntax for filling out forms.
 
-An example:
+EXAMPLE
 
-#!/usr/bin/env runhaskell
+	#!/usr/bin/env runhaskell
 
-module ShpiderTest where
+	module ShpiderTest where
 
-import Network.Shpider hiding (get)
-import Network.Shpider.Curl.Opts
+	import Network.Shpider hiding (get)
+	import Network.Shpider.Curl.Opts
 
-main = do
-  (result, page) <- runShpiderWithOptions [CurlUserAgent "Windows Mozilla"] $ do
-    download "http://browser.yellosoft.us/text.php"
+	main = do
+	  (result, page) <- runShpiderWithOptions [CurlUserAgent "Windows Mozilla"] $ do
+	    download "http://browser.yellosoft.us/text.php"
 
-  case result of
-    Ok -> putStrLn "Ok"
-    _ -> putStrLn "Error"
+	  case result of
+	    Ok -> putStrLn "Ok"
+	    _ -> putStrLn "Error"
 
-  putStrLn $ source page
+	  putStrLn $ source page
