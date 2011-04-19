@@ -38,7 +38,7 @@ module Network.Shpider.State
 
 import Control.Monad.State
 
-import Network.Shpider.Curl.Curl
+import Network.Curl
 
 import Data.Maybe
 

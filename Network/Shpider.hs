@@ -57,7 +57,7 @@ module Network.Shpider
    ) 
    where
 
-import Network.Shpider.Curl.Curl 
+import Network.Curl 
 
 import Text.HTML.TagSoup
 import Text.Regex.Posix

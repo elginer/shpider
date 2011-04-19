@@ -29,8 +29,8 @@ module Network.Shpider.Options where
 
 import Data.Maybe
 
-import Network.Shpider.Curl.Opts
-import Network.Shpider.Curl.Types
+import Network.Curl.Opts
+import Network.Curl.Types
 
 import Network.Shpider.State
 import Network.Shpider.URL

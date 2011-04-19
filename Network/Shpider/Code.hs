@@ -25,13 +25,13 @@
 -}
 
 module Network.Shpider.Code 
-   ( module Network.Shpider.Curl.Code
+   ( module Network.Curl.Code
    , ccToSh
    , ShpiderCode (..)
    )
    where
 
-import Network.Shpider.Curl.Code
+import Network.Curl.Code
 
 -- | Converts a `CurlCode` to a `ShpiderCode`.
 ccToSh :: CurlCode -> ShpiderCode
