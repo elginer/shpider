@@ -44,23 +44,20 @@ import Network.Shpider.TextUtils
 -- | is the second url on the same domain as the first? Note: this will return False if either URL is invalid.
 isSameDomain :: String -> String -> Bool
 isSameDomain urlYourOn urlYourNot =
-   let url1 =
-          importURL urlYourOn
-       url2 =
-          importURL urlYourNot
+   let url1 = importURL urlYourOn
+       url2 = importURL urlYourNot
    in
    maybe False
-         ( \ t1 ->
-              maybe False
-                    ( \ t2 ->
+         (\t1 -> maybe False
+                    (\t2 ->
                          let urlType1 = url_type t1
                              urlType2 = url_type t2
-                             isRelative ut = ( ut == PathRelative ) || ( ut == HostRelative )
+                             isRelative ut = ut `elem` [PathRelative, HostRelative]
                              ut1Relative = isRelative urlType1
                              ut2Relative = isRelative urlType2
                              utsSame = urlType1 == urlType2
                          in
-                         ( ut1Relative || ut2Relative || utsSame )
+                         (ut1Relative || ut2Relative || utsSame)
                     )
                     url2
          )
@@ -68,52 +65,40 @@ isSameDomain urlYourOn urlYourNot =
 
 -- | Assumes the given URL is relative to `currentPage`.
 mkAbsoluteUrl :: String -> Shpider ( Maybe String )
-mkAbsoluteUrl uncleanUrl = do
-   if not $ isMailto uncleanUrl
-      then do
-         shpider <- get
-         let cleanUrlStr = escapeSpaces uncleanUrl
-             maybeUrl = importURL cleanUrlStr
-             currentAddr = addr $ currentPage shpider
-         maybe ( return Nothing )
-               ( \ url ->
-                    case url_type url of
-                       PathRelative ->
-                          return $ Just $ getFolder currentAddr ++ urlStr
-                       HostRelative ->
-                          return $ Just $ getDomain currentAddr ++ urlStr
-                       _ ->
-                          return $ Just urlStr
-               )
-               maybeUrl
-      else
-         return Nothing
+mkAbsoluteUrl uncleanUrl = if not $ isMailto uncleanUrl
+   then do
+      shpider <- get
+      let cleanUrlStr = escapeSpaces uncleanUrl
+          maybeUrl = importURL cleanUrlStr
+          currentAddr = addr $ currentPage shpider
+
+      maybe (return Nothing)
+            (\url -> return $ Just $ case url_type url of
+                    PathRelative -> getFolder currentAddr ++ urlStr
+                    HostRelative -> getDomain currentAddr ++ urlStr
+                    _ -> urlStr
+            )
+
+            maybeUrl
+   else return Nothing
    where
-   urlStr =
-      escapeSpaces uncleanUrl
+      urlStr = escapeSpaces uncleanUrl
 
 -- | True if the url is absolute
 isAbsoluteUrl :: String -> Bool
-isAbsoluteUrl urlStr =
-   case importURL urlStr of
-      Just url ->
-         case url_type url of
-            Absolute _ ->
-               True
-            _ ->
-               False
-      _ ->
-         False
+isAbsoluteUrl urlStr = case importURL urlStr of
+   Just url -> case url_type url of
+      Absolute _ -> True
+      _ -> False
+   _ -> False
 
 -- | is the given string of form \"mailto:person.com\"?
 isMailto :: String -> Bool
-isMailto =
-   flip (=~) "mailto:.*"
+isMailto = flip (=~) "mailto:.*"
 
 -- | is the url a http url?
 isHttp :: String -> Bool
-isHttp =
-   flip (=~) "(http://|https://).*"
+isHttp = flip (=~) "(http://|https://).*"
 
 -- | Get the protocol and domain from a URL eg
 --
@@ -122,8 +107,7 @@ isHttp =
 --    -- \"widdle:\/\/owqueer.co.uk\"
 -- @
 getDomain :: String -> String
-getDomain =
-   flip (=~) "[^:]+://[^/]+" 
+getDomain = flip (=~) "[^:]+://[^/]+" 
 
 -- | Get the whole url up to and including the current folder of the present document.
 -- 
@@ -133,14 +117,9 @@ getDomain =
 -- @
 getFolder :: String -> String
 getFolder url =
-  let ms =
-         url =~ "[^/]*/[^/]*"
-      l =
-         length ms
+  let ms = url =~ "[^/]*/[^/]*"
+      l = length ms
   in
   if l > 0
-     then
-        ( concat $ take ( l - 1 ) $ map head ms ) ++ "/"
-     else
-        ""
-
+     then concat (take (l - 1) $ map head ms) ++ "/"
+     else ""

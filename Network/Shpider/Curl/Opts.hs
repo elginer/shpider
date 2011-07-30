@@ -181,29 +181,28 @@ data CurlOption
  | CurlUserPassword  String
  | CurlProxyUser     String
  | CurlProxyPassword String
-  
 
 instance Show CurlOption where
-  show x = showCurlOption x
+  show = showCurlOption
 
 data HttpVersion
  = HttpVersionNone
  | HttpVersion10
  | HttpVersion11
-   deriving ( Enum,Show )
+ deriving (Enum, Show)
 
 data TimeCond
  = TimeCondNone
  | TimeCondIfModSince
  | TimeCondIfUnmodSince
  | TimeCondLastMode
-   deriving ( Enum, Show )
- 
+ deriving (Enum, Show)
+
 data NetRcOption
  = NetRcIgnored
  | NetRcOptional
  | NetRcRequired
-   deriving ( Enum, Show )
+ deriving (Enum, Show)
 
 data HttpAuth
  = HttpAuthNone
@@ -213,21 +212,20 @@ data HttpAuth
  | HttpAuthNTLM
  | HttpAuthAny
  | HttpAuthAnySafe
-   deriving ( Enum, Show )
+ deriving (Enum, Show)
 
 toHttpAuthMask :: [HttpAuth] -> Long
 toHttpAuthMask [] = 0
 toHttpAuthMask (x:xs) = 
   let vs = toHttpAuthMask xs in
-  case x of 
+  case x of
     HttpAuthNone  -> vs
     HttpAuthBasic -> 0x1 .|. vs
     HttpAuthDigest -> 0x2 .|. vs
     HttpAuthGSSNegotiate -> 0x4 .|. vs
     HttpAuthNTLM -> 0x8 .|. vs
-    HttpAuthAny -> (complement 0) .|. vs
-    HttpAuthAnySafe -> (complement 1) .|. vs
-
+    HttpAuthAny -> complement 0 .|. vs
+    HttpAuthAnySafe -> complement 1 .|. vs
 
 data SSHAuthType
  = SSHAuthAny
@@ -236,21 +234,19 @@ data SSHAuthType
  | SSHAuthPassword
  | SSHAuthHost
  | SSHAuthKeyboard
-   deriving ( Show )
-
+ deriving (Show)
 
 toSSHAuthMask :: [SSHAuthType] -> Long
 toSSHAuthMask [] = 0
 toSSHAuthMask (x:xs) = 
   let vs = toSSHAuthMask xs in 
   case x of
-    SSHAuthAny -> (complement 0) .|. vs
+    SSHAuthAny -> complement 0 .|. vs
     SSHAuthNone -> vs
     SSHAuthPublickey -> 1 .|. vs
     SSHAuthPassword -> 2 .|. vs
     SSHAuthHost -> 4 .|. vs
     SSHAuthKeyboard -> 8 .|. vs
-
 
 type WriteFunction
   = Ptr CChar  --  pointer to external buffer holding data
@@ -272,7 +268,6 @@ type ReadFunctionPrim
  -> CInt
  -> Ptr ()
  -> IO CInt
- 
 
 type ProgressFunction
   = Ptr ()  --  state argument
@@ -298,7 +293,7 @@ data DebugInfo
  | InfoDataOut
  | InfoSslDataIn
  | InfoSslDataOut
-   deriving ( Eq, Enum )
+ deriving (Eq, Enum)
 
 type DebugFunctionPrim
   = CurlH      --  connection handle
@@ -307,8 +302,6 @@ type DebugFunctionPrim
  -> CInt       --  length of buffer
  -> Ptr ()     --  state argument
  -> IO CInt    --  always 0
-
-
 
 type SSLCtxtFunction
   = CurlH   --  connection handle
@@ -353,7 +346,7 @@ unmarshallOption um c =
   CurlReadFunction x  -> u_readFun  um (f 12) x
   CurlTimeout x ->  u_long um (l 13) x
   CurlInFileSize x -> u_long um (l 14) x
-  CurlPostFields x -> u_string um (o 15) (concat $ intersperse "&" x)
+  CurlPostFields x -> u_string um (o 15) (intercalate "&" x)
   CurlReferer x ->  u_string um (o 16) x
   CurlFtpPort x ->  u_string um (o 17) x
   CurlUserAgent x -> u_string um (o 18) x

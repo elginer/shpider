@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XTypeSynonymInstances -XFlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 -- | Note: As you may have gathered, this is not the official module.  The cookie handling in the curl package is non-determistic in its handling of cookies as they are written from curl_easy_cleanup during garbage collection, easy_cleanup is called explicitely, writing the cookies instantly . However, I have preserved the following copyright notice to give credit where it's due.
 --------------------------------------------------------------------
 -- Module    : Network.Curl
@@ -94,14 +94,14 @@ import Network.Shpider.Curl.Easy
 
 import Foreign.C.String
 import Data.IORef
-import Data.List(isPrefixOf)
+import Data.List (isPrefixOf)
 import System.IO
-import Control.Exception ( finally )
+import Control.Exception (finally)
 
-import Data.ByteString ( ByteString, packCStringLen )
-import qualified Data.ByteString as BS ( concat )
+import Data.ByteString (ByteString, packCStringLen)
+import qualified Data.ByteString as BS (concat)
 
-import qualified Data.ByteString.Lazy as LazyBS ( ByteString, fromChunks )
+import qualified Data.ByteString.Lazy as LazyBS (ByteString, fromChunks)
 
 -- | The @CurlBuffer@ class encodes the representation
 -- of response buffers, allowing you to provide your
@@ -116,7 +116,7 @@ class CurlBuffer bufferTy where
 -- of response headers. Similar to 'CurlBuffer'.
 --
 class CurlHeader headerTy where
-  newIncomingHeader :: IO (IO (String{-status-},headerTy), CStringLen -> IO ())
+  newIncomingHeader :: IO (IO (String{-status-}, headerTy), CStringLen -> IO ())
 
 instance CurlHeader [(String,String)] where
   newIncomingHeader = do
@@ -125,43 +125,43 @@ instance CurlHeader [(String,String)] where
           hss <- readIORef ref
           let (st,hs) = parseStatusNHeaders (concRev [] hss)
           return (st,hs)
-    return (readFinalHeader, \ v -> peekCStringLen v >>= \ x -> modifyIORef ref (x:))
+    return (readFinalHeader, \v -> peekCStringLen v >>= \x -> modifyIORef ref (x:))
 
 instance CurlBuffer String where
   newIncoming = do
     ref <- newIORef []
     let readFinal = readIORef ref >>= return . concat . reverse
-    return (readFinal, \ v -> peekCStringLen v >>= \ x -> modifyIORef ref (x:))
+    return (readFinal, \v -> peekCStringLen v >>= \x -> modifyIORef ref (x:))
 
 instance CurlBuffer ByteString where
   newIncoming = do
     ref <- newIORef []
     let readFinal = readIORef ref >>= return . BS.concat . reverse
-    return (readFinal, \ v -> packCStringLen v >>= \ x -> modifyIORef ref (x:))
+    return (readFinal, \v -> packCStringLen v >>= \x -> modifyIORef ref (x:))
 
 instance CurlBuffer [ByteString] where
   newIncoming = do
     ref <- newIORef []
     let readFinal = readIORef ref >>= return . reverse
-    return (readFinal, \ v -> packCStringLen v >>= \ x -> modifyIORef ref (x:))
+    return (readFinal, \v -> packCStringLen v >>= \x -> modifyIORef ref (x:))
 
 instance CurlBuffer LazyBS.ByteString where
   newIncoming = do
     ref <- newIORef []
     let readFinal = readIORef ref >>= return . LazyBS.fromChunks . reverse
-    return (readFinal, \ v -> packCStringLen v >>= \ x -> modifyIORef ref (x:))
+    return (readFinal, \v -> packCStringLen v >>= \x -> modifyIORef ref (x:))
 
 -- | Should be used once to wrap all uses of libcurl.
 -- WARNING: the argument should not return before it
 -- is completely done with curl (e.g., no forking or lazy returns)
 withCurlDo :: IO a -> IO a
-withCurlDo m  = do curl_global_init 3   -- initialize everything
-                   finally m curl_global_cleanup
+withCurlDo m  = do
+   curl_global_init 3   -- initialize everything
+   finally m curl_global_cleanup
 
 -- | Set a list of options on a Curl handle.
 setopts :: Curl -> [CurlOption] -> IO ()
-setopts h opts = mapM_ (setopt h) opts
-
+setopts h = mapM_ (setopt h)
 
 method_GET   :: [CurlOption]
 method_GET    = [CurlPost False, CurlNoBody False]
@@ -187,13 +187,8 @@ curlGet url opts = initialize_no_cleanup >>= \ h -> do
 
 setDefaultSSLOpts :: Curl -> URLString -> IO ()
 setDefaultSSLOpts h url
- | "https:" `isPrefixOf` url = do
-    -- the default options are pretty dire, really -- turning off
-    -- the peer verification checks!
-   mapM_ (setopt h)
-         [ CurlSSLVerifyPeer False
-         , CurlSSLVerifyHost 0
-         ]
+ -- The default options are pretty dire, really! Turning off the peer verification checks!
+ | "https:" `isPrefixOf` url = mapM_ (setopt h) [CurlSSLVerifyPeer False, CurlSSLVerifyHost 0]
  | otherwise = return ()
 
 -- | 'curlGetString' performs the same request as 'curlGet', but 
@@ -242,9 +237,8 @@ data CurlResponse_ headerTy bodyTy
      , respStatusLine :: String
      , respHeaders    :: headerTy
      , respBody       :: bodyTy
-     , respGetInfo    :: (Info -> IO InfoValue)
+     , respGetInfo    :: Info -> IO InfoValue
      }
-
 
 -- | @curlGetResponse url opts@ performs a @GET@, returning all the info
 -- it can lay its hands on in the response, a value of type 'CurlResponse'.
@@ -268,7 +262,7 @@ curlGetResponse_ url opts = do
 curlGetResponse :: URLString
                 -> [CurlOption]
                 -> IO CurlResponse
-curlGetResponse url opts = curlGetResponse_ url opts
+curlGetResponse = curlGetResponse_
 
 -- | Perform the actions already specified on the handle.
 -- Collects useful information about the returned message.
@@ -277,7 +271,7 @@ curlGetResponse url opts = curlGetResponse_ url opts
 perform_with_response :: (CurlHeader hdrTy, CurlBuffer bufTy)
                       => Curl
 		      -> IO (CurlResponse_ hdrTy bufTy)
-perform_with_response h = perform_with_response_ h
+perform_with_response = perform_with_response_
 
 {-# DEPRECATED perform_with_response "Consider switching to perform_with_response_" #-}
 
@@ -356,7 +350,7 @@ perform_with_response_ h = do
 -- The provided URL will overwride any 'CurlURL' options that
 -- are provided in the list of options.  See also: 'perform_with_response'.
 do_curl :: Curl -> URLString -> [CurlOption] -> IO CurlResponse
-do_curl h url opts = do_curl_ h url opts
+do_curl = do_curl_
 
 {-# DEPRECATED do_curl "Consider switching to do_curl_" #-}
 
@@ -408,8 +402,7 @@ curlHead_ url opts = initialize_no_cleanup >>= \ h -> do
 -- utils
 
 concRev :: [a] -> [[a]] -> [a]
-concRev acc []     = acc
-concRev acc (x:xs) = concRev (x++acc) xs
+concRev = foldl (flip (++))
 
 parseStatusNHeaders :: String -> (String, [(String,String)])
 parseStatusNHeaders ys =
@@ -422,13 +415,12 @@ parseStatusNHeaders ys =
   intoLines acc (x:xs) = intoLines (x:acc) xs
   
   addLine "" ls = ls
-  addLine  l ls = (reverse l) : ls
+  addLine  l ls = reverse l : ls
   
 parseHeader :: String -> (String,String)
-parseHeader xs = 
-  case break (':' ==) xs of
-   (as,_:bs) -> (as, bs)
-   (as,_)    -> (as,"")
+parseHeader xs =  case break (':' ==) xs of
+   (as, _:bs) -> (as, bs)
+   (as, _)    -> (as, "")
 
 -- | 'curlMultiPost' perform a multi-part POST submission.
 curlMultiPost :: URLString -> [CurlOption] -> [HttpPost] -> IO ()
@@ -471,9 +463,9 @@ callbackWriter f pBuf sz szI _ =
 -- | Imports data into the Haskell world and invokes the callback.
 callbackWriter_ :: (CStringLen -> IO ()) -> WriteFunction
 callbackWriter_ f pBuf sz szI _ = do
-  do let bytes = sz * szI 
-     f (pBuf,fromIntegral bytes)
-     return bytes
+   let bytes = sz * szI 
+   f (pBuf,fromIntegral bytes)
+   return bytes
 
 -- | The output of Curl is ignored.  This function
 -- does not marshall data into Haskell.
@@ -486,17 +478,16 @@ gatherOutput r = callbackWriter (\ v -> modifyIORef r (v:))
 
 -- | Add chunks of data to an IORef as they arrive.
 gatherOutput_ :: (CStringLen -> IO ()) -> WriteFunction
-gatherOutput_ f = callbackWriter_ f
+gatherOutput_ = callbackWriter_
 
 getResponseCode :: Curl -> IO Int
 getResponseCode c = do
    iv <- getInfo c ResponseCode
    case iv of
      IString s -> 
-       case (reads s) of
-         ((v,_):_) -> return v
+       case reads s of
+         ((v, _):_) -> return v
          _ -> fail ("Curl.getResponseCode: not a valid integer string " ++ s)
      IDouble d -> return (round d)
      ILong x   -> return (fromIntegral x)
      IList{}   -> fail ("Curl.getResponseCode: unexpected response code " ++ show iv)
-
