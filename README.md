@@ -13,4 +13,4 @@ It also provides a nice syntax for filling out forms.
 EXAMPLE
 
     $ make
-    $ ./shpidertest.hs
+    $ ./shpidertest
