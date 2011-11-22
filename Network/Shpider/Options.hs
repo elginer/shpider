@@ -130,3 +130,12 @@ setCurlOpts :: [CurlOption] -> Shpider ()
 setCurlOpts opts = do
   shpider <- get
   put $ shpider { curlOpts = opts}
+  
+
+-- | Set download throttling, so that subsequent calls to 'download'
+-- or 'sendForm' block, making sure at least N micro-seconds pass.
+-- Passing a "Nothing" would disable any throttling.
+setThrottle :: Maybe Int -> Shpider ()
+setThrottle n = do
+  sh <- get
+  put $ sh { downloadThrottle = n}

@@ -41,8 +41,10 @@ module Network.Shpider
    , module Network.Shpider.Options
    , module Network.Shpider.Forms
    , module Network.Shpider.Links
+   -- * Crawl Functions
    , download
    , sendForm
+   -- * Basic Parsing/Decision Support
    , getLinksByText
    , getLinksByTextRegex
    , getLinksByAddressRegex
@@ -50,6 +52,7 @@ module Network.Shpider
    , getFormsHasAction
    , currentLinks
    , currentForms
+   -- * Utilities
    , parsePage
    , isAuthorizedDomain
    , withAuthorizedDomain
@@ -57,24 +60,22 @@ module Network.Shpider
    ) 
    where
 
-import Network.Curl 
+import           Control.Concurrent
+import qualified Data.Map                as M
+import           Data.Maybe
+import           Data.Time
+import           Network.Curl
+import           Network.Shpider.Code
+import           Network.Shpider.Forms
+import           Network.Shpider.Links
+import           Network.Shpider.Options
+import           Network.Shpider.State
+import           Network.Shpider.URL
+import           Text.HTML.TagSoup
+import           Text.HTML.TagSoup
+import           Text.Regex.Posix
+import           Web.Encodings
 
-import Text.HTML.TagSoup
-import Text.Regex.Posix
-
-import qualified Data.Map as M
-import Data.Maybe
-
-import Text.HTML.TagSoup
-
-import Network.Shpider.State
-import Network.Shpider.URL
-import Network.Shpider.Code
-import Network.Shpider.Options
-import Network.Shpider.Forms
-import Network.Shpider.Links
-
-import Web.Encodings
 
 -- | if `keepTrack` has been set, then haveVisited will return `True` if the given URL has been visited.
 haveVisited :: String -> Shpider Bool
@@ -120,11 +121,48 @@ parsePage paddr html = do
    setCurrentPage newP
    return newP
 
-curlDownload url = do
-   shpider <- get
-   res <- liftIO $ curlGetString url $ curlOpts shpider
-   r <- mkRes url res
-   return r
+
+-------------------------------------------------------------------------------
+-- | Perform the given operation subject to blocking throttling based
+-- on the last time there was a download.
+withThrottle :: Shpider a -> Shpider a
+withThrottle f = do
+  let perform = do
+        res <- f
+        sh <- get
+        now <- liftIO $ getCurrentTime
+        put $ sh { lastDownloadTime = Just now }
+        return res
+  thOpt <- gets downloadThrottle
+  lastD <- gets lastDownloadTime
+  case thOpt of
+    Nothing -> perform
+    Just n -> do
+      case lastD of 
+        Nothing -> perform
+        Just ld -> do
+          th <- liftIO $ shouldThrottle n ld
+          case th of
+            Just x -> liftIO (threadDelay x) >> perform
+            Nothing -> perform
+            
+
+-------------------------------------------------------------------------------
+-- | Test whether we need to throttle
+shouldThrottle :: Int -> UTCTime -> IO (Maybe Int)
+shouldThrottle n lastTime = do
+  now <- getCurrentTime
+  let n' = fromIntegral n / 1000000
+      diff = diffUTCTime now lastTime
+      delta = round . (* 1000000) $ n' - diff
+  return $  if delta > 0 then (Just delta) else Nothing
+
+
+curlDownload url = withThrottle $ do
+  shpider <- get
+  res <- liftIO $ curlGetString url $ curlOpts shpider
+  r <- mkRes url res
+  return r
 
 mkRes url ( curlCode , html ) = do
    p <- if curlCode == CurlOK
@@ -135,7 +173,7 @@ mkRes url ( curlCode , html ) = do
    return ( ccToSh curlCode , p )
 
 
-curlDownloadPost url fields = do
+curlDownloadPost url fields = withThrottle $ do
    shpider <- get
    res <- liftIO $ curlGetString url $ opts shpider
    mkRes url res
@@ -146,7 +184,7 @@ curlDownloadPost url fields = do
       ] ++ curlOpts sh
 
 
-curlDownloadHead urlStr = do
+curlDownloadHead urlStr = withThrottle $ do
    shpider <- get
    liftIO $ curlHead urlStr $ curlOpts shpider
 

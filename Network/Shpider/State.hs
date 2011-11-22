@@ -37,15 +37,13 @@ module Network.Shpider.State
    where
 
 import Control.Monad.State
-
-import Network.Curl
-
 import Data.Maybe
-
-import Text.HTML.TagSoup.Parsec
-
+import Data.Time
+import Network.Curl
 import Network.Shpider.Forms
 import Network.Shpider.Links
+import Text.HTML.TagSoup.Parsec
+
 
 -- | The shpider state holds all the options for shpider transactions, the current page and all the `CurlOption`s used when calling curl.
 data ShpiderState =
@@ -55,6 +53,10 @@ data ShpiderState =
       , curlOpts :: [ CurlOption ]
       , currentPage :: Page 
       , visited :: Maybe [ String ]
+      , downloadThrottle :: Maybe Int
+      -- ^ Whether to wait at least N micro-seconds between downloads
+      -- or form submissions. Defaults to 'Nothing'.
+      , lastDownloadTime :: Maybe UTCTime
       }
    deriving Show
 
@@ -85,6 +87,8 @@ initialSt =
                    ]
       , currentPage = emptyPage 
       , visited = Nothing 
+      , downloadThrottle = Nothing
+      , lastDownloadTime = Nothing
       }
 
 -- | The Page datatype.  Holds `Link`s, `Form`s, the parsed [ `Tag` ], the page source, and the page's absolute URL.
