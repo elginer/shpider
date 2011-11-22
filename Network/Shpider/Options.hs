@@ -116,3 +116,17 @@ keepTrack :: Shpider ( )
 keepTrack = do
    shpider <- get
    put $ shpider { visited = Just [ ] }
+
+
+-- | Add CURL options to Shpider
+addCurlOpts :: [CurlOption] -> Shpider ()
+addCurlOpts opts = do
+  shpider <- get
+  put $ shpider { curlOpts = opts ++ curlOpts shpider }
+  
+
+-- | Set Shpider's CURL options from scratch
+setCurlOpts :: [CurlOption] -> Shpider ()
+setCurlOpts opts = do
+  shpider <- get
+  put $ shpider { curlOpts = opts}
