@@ -1,5 +1,5 @@
 Name:               shpider 
-Version:            0.2.1.0
+Version:            0.2.1.1
 Synopsis:           Web automation library in Haskell.
 Description:
     Shpider is a web automation library for Haskell.   It allows you to quickly
@@ -37,7 +37,7 @@ Library
       base < 5
     , regex-posix 
     , curl
-    , tagsoup-parsec 
+    , tagsoup-parsec >= 0.0.8
     , url>=2 
     , containers 
     , tagsoup 
