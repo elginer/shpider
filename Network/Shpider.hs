@@ -158,12 +158,6 @@ shouldThrottle n lastTime = do
   return $  if delta > 0 then (Just delta) else Nothing
 
 
-curlDownload url = withThrottle $ do
-  shpider <- get
-  res <- liftIO $ curlGetString url $ curlOpts shpider
-  r <- mkRes url res
-  return r
-
 mkRes url ( curlCode , html ) = do
    p <- if curlCode == CurlOK
            then
@@ -172,21 +166,6 @@ mkRes url ( curlCode , html ) = do
               return emptyPage
    return ( ccToSh curlCode , p )
 
-
-curlDownloadPost url fields = withThrottle $ do
-   shpider <- get
-   res <- liftIO $ curlGetString url $ opts shpider
-   mkRes url res
-   where
-    opts sh = 
-      [ CurlPostFields (map toPostField fields)
-      , CurlPost True
-      ] ++ curlOpts sh
-
-
-curlDownloadHead urlStr = withThrottle $ do
-   shpider <- get
-   liftIO $ curlHead urlStr $ curlOpts shpider
 
 validContentType :: String -> Bool
 validContentType ct =
@@ -280,9 +259,9 @@ sendForm form = do
                                                  ) 
                                                  u
                                                  ( M.toList $ inputs form )
-                    curlDownload addr
+                    getURL addr
                  POST ->
-                    curlDownloadPost absAddr $ M.toList $ inputs form          
+                    postURL absAddr $ M.toList $ inputs form          
          )
          mabsAddr
    
