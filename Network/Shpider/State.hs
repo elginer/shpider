@@ -32,16 +32,25 @@ module Network.Shpider.State
    , Shpider
    , emptyPage
    , runShpider
+   , runShpiderSave
    , runShpiderSt
+   , getPageFile
+   , getStoredPage
    )
    where
 
 import Control.Monad.State
+import Control.Monad.Trans.Maybe
+import qualified Data.Map as M
+import           Data.Map (Map, (!))
 import Data.Maybe
 import Data.Time
+import Data.Word
 import Network.Curl
 import Network.Shpider.Forms
 import Network.Shpider.Links
+import System.Directory
+import System.FilePath.Posix
 import Text.HTML.TagSoup.Parsec
 
 
@@ -57,6 +66,11 @@ data ShpiderState =
       -- ^ Whether to wait at least N micro-seconds between downloads
       -- or form submissions. Defaults to 'Nothing'.
       , lastDownloadTime :: Maybe UTCTime
+
+      , pageFilenames :: Map String String
+      , offlineMode :: Bool
+      , pageSaveDir :: Maybe FilePath
+      , pageCount :: Word64
       }
    deriving Show
 
@@ -71,9 +85,22 @@ runShpiderSt f =
 
 -- | Run a Shpider computation, returning the result.
 runShpider :: Shpider a -> IO a
-runShpider f = do
-   ( res , _ ) <- runShpiderSt f
-   return res
+runShpider k = evalShpiderWith k initialSt
+
+-- | Run a Shpider computation and using the specified directory to save
+-- (or read if they exist) the pages from disk.
+runShpiderSave :: FilePath -> Shpider a -> IO a
+runShpiderSave pageDir k = do
+    exists <- doesDirectoryExist pageDir
+    offline <- if exists then return True
+                         else createDirectory pageDir >> return False
+    evalShpiderWith k $
+        initialSt { offlineMode = offline
+                  , pageSaveDir = Just pageDir
+                  }
+
+evalShpiderWith :: Shpider a -> ShpiderState -> IO a
+evalShpiderWith k s = withCurlDo $ evalStateT k s
 
 -- | The initial shpider state.
 -- Currently, CurlTimeout is hard wired to 3, and cookies are saved in a file called "cookies".
@@ -89,6 +116,10 @@ initialSt =
       , visited = Nothing 
       , downloadThrottle = Nothing
       , lastDownloadTime = Nothing
+      , pageFilenames = M.empty
+      , offlineMode = False
+      , pageSaveDir = Nothing
+      , pageCount = 0
       }
 
 -- | The Page datatype.  Holds `Link`s, `Form`s, the parsed [ `Tag` ], the page source, and the page's absolute URL.
@@ -110,3 +141,36 @@ emptyPage =
         , tags = []
         , addr =""
         }
+
+
+------------------------------------------------------------------------------
+-- | Gets and increments the next page count.
+nextPageCount = do
+    next <- gets pageCount
+    modify (\s -> s { pageCount = pageCount s + 1 })
+    return $ show next
+
+
+------------------------------------------------------------------------------
+-- | Gets the filename for a stored page.
+getPageFile :: String -> Shpider (Maybe FilePath)
+getPageFile url = runMaybeT $ do
+    dir <- MaybeT $ gets pageSaveDir
+    mname <- lift $ gets (M.lookup url . pageFilenames)
+    let pad len s = replicate (len - length s) '0' ++ s
+        complete s = dir </> pad 3 s ++ ".html"
+    lift $ complete `fmap` maybe nextPageCount return mname
+
+
+------------------------------------------------------------------------------
+-- | Reads a stored page from disk.
+getStoredPage :: String -> Shpider String
+getStoredPage url = do
+    liftIO $ putStrLn $ "Reading local copy of "++url
+    name <- getPageFile url
+    when (isNothing name) $ error "Trying to get a stored page without a directory!  This shouldn't happen"
+    (storedUrl,rest) <- span (/='\n') `fmap` liftIO (readFile $ fromJust name)
+    when (storedUrl /= url) $ do
+        error "Access pattern doesn't match stored data.  You probably should delete the stored pages and re-run."
+    return $ drop 1 rest
+

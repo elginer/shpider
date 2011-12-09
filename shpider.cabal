@@ -37,6 +37,8 @@ Library
       base < 5
     , regex-posix 
     , curl
+    , directory       >= 1.0
+    , filepath        >= 1.2 && < 1.3
     , tagsoup-parsec >= 0.0.8
     , url>=2 
     , containers 
@@ -44,6 +46,7 @@ Library
     , mtl
     , time 
     , bytestring
+    , transformers
     , web-encodings
    Exposed-modules: Network.Shpider.URL
                     Network.Shpider.Code

@@ -188,12 +188,14 @@ curlDownloadHead urlStr = withThrottle $ do
    shpider <- get
    liftIO $ curlHead urlStr $ curlOpts shpider
 
+validContentType :: String -> Bool
 validContentType ct =
    or $ map ( \ htmlct ->
                  ct =~ htmlct
             )
             htmlContentTypes
 
+htmlContentTypes :: [String]
 htmlContentTypes =
    [ "text/html"
    , "application/xhtml+xml"
@@ -225,28 +227,29 @@ download messyUrl = do
          return ( UnsupportedProtocol , emptyPage )
 
 
+downloadAPage :: String -> Shpider (ShpiderCode, Page)
 downloadAPage url = do
-   shpider <- get
+   shpider <- get 
    if htmlOnlyDownloads shpider
       then do
          if isHttp url
             then do
-               ( _ , headers ) <- curlDownloadHead url
-               let maybeContentType =
-                      lookup "Content-Type" headers
-               maybe ( curlDownload url )
-                     ( \ ct -> do
-                          if validContentType ct 
+               response <- withThrottle $ liftIO $
+                  curlGetResponse_ url (curlOpts shpider)
+               maybe ( mkRes url (respCurlCode response, respBody response))
+                     ( \ ct ->
+                          if validContentType ct
                              then
-                                curlDownload url
+                                mkRes url (CurlOK, respBody response)
                              else
-                                return ( WrongData , emptyPage )
+                                return (WrongData, emptyPage)
                      )
-                     maybeContentType
+                     (lookup ("Content-Type" :: String) $ respHeaders response)
             else
-               curlDownload url
+               getURL url
       else
-         curlDownload url
+         getURL url
+
 
 -- | withAuthorizedDomain will execute the function if the url given is an authorized domain.
 -- See `isAuthorizedDomain`.
@@ -340,3 +343,41 @@ getLinksByAddressRegex r = do
    cls <- currentLinks
    return $ filter ( flip (=~) r . linkAddress )
                    cls
+
+
+------------------------------------------------------------------------------
+-- | Gets the contents of the page at the specified URL.  If currently in
+-- offline mode, then the file is read from disk.  Otherwise it is downloaded.
+getURL :: String -> Shpider (ShpiderCode, Page)
+getURL url = withThrottle $ do
+    shpider <- get
+    if offlineMode shpider
+      then do
+          p <- getStoredPage url
+          mkRes url (CurlOK, p)
+      else requestAndStore url (curlOpts shpider)
+
+
+------------------------------------------------------------------------------
+-- | Sends an HTTP POST request to a url.
+postURL url fields = withThrottle $ do
+   shpider <- get
+   requestAndStore url $ opts shpider
+   where
+    opts sh =
+      [ CurlPostFields (map toPostField fields)
+      , CurlPost True
+      ] ++ curlOpts sh
+
+
+------------------------------------------------------------------------------
+-- |
+requestAndStore :: String -> [CurlOption] -> Shpider (ShpiderCode, Page)
+requestAndStore url opts = do
+    liftIO $ putStrLn $ "Requesting " ++ url
+    contents <- liftIO $ curlGetString_ url opts
+    mfile <- getPageFile url
+    let write file = liftIO $ writeFile file
+            (unlines [url, snd contents])
+    maybe (return ()) write mfile
+    mkRes url contents
