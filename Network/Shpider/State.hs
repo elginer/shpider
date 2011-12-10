@@ -26,7 +26,7 @@
 
 -- | This module describes the state of shpider computations, and provides a monad transformer over it.
 module Network.Shpider.State 
-   ( module Control.Monad.State
+   ( module Control.Monad.State.Strict
    , ShpiderState (..)
    , Page (..)
    , Shpider
@@ -39,19 +39,19 @@ module Network.Shpider.State
    )
    where
 
-import Control.Monad.State
-import Control.Monad.Trans.Maybe
-import qualified Data.Map as M
-import           Data.Map (Map, (!))
-import Data.Maybe
-import Data.Time
-import Data.Word
-import Network.Curl
-import Network.Shpider.Forms
-import Network.Shpider.Links
-import System.Directory
-import System.FilePath.Posix
-import Text.HTML.TagSoup.Parsec
+import           Control.Monad.State.Strict
+import           Control.Monad.Trans.Maybe
+import qualified Data.Map                   as M
+import           Data.Map                   (Map, (!))
+import           Data.Maybe
+import           Data.Time
+import           Data.Word
+import           Network.Curl
+import           Network.Shpider.Forms
+import           Network.Shpider.Links
+import           System.Directory
+import           System.FilePath.Posix
+import           Text.HTML.TagSoup.Parsec
 
 
 -- | The shpider state holds all the options for shpider transactions, the current page and all the `CurlOption`s used when calling curl.
@@ -65,12 +65,12 @@ data ShpiderState =
       , downloadThrottle :: Maybe Int
       -- ^ Whether to wait at least N micro-seconds between downloads
       -- or form submissions. Defaults to 'Nothing'.
-      , lastDownloadTime :: Maybe UTCTime
+      , lastDownloadTime :: !(Maybe UTCTime)
 
       , pageFilenames :: Map String String
       , offlineMode :: Bool
       , pageSaveDir :: Maybe FilePath
-      , pageCount :: Word64
+      , pageCount :: !Word64
       }
    deriving Show
 
