@@ -61,6 +61,7 @@ module Network.Shpider
    where
 
 import           Control.Concurrent
+import           Control.Monad.State
 import qualified Data.Map                as M
 import           Data.Maybe
 import           Data.Time
@@ -71,6 +72,7 @@ import           Network.Shpider.Links
 import           Network.Shpider.Options
 import           Network.Shpider.State
 import           Network.Shpider.URL
+import           System.Directory
 import           Text.HTML.TagSoup
 import           Text.HTML.TagSoup
 import           Text.Regex.Posix
@@ -330,18 +332,14 @@ getLinksByAddressRegex r = do
 getURL :: String -> Shpider (ShpiderCode, Page)
 getURL url = withThrottle $ do
     shpider <- get
-    if offlineMode shpider
-      then do
-          p <- getStoredPage url
-          mkRes url (CurlOK, p)
-      else requestAndStore url (curlOpts shpider)
+    cachedRequest url (curlOpts shpider)
 
 
 ------------------------------------------------------------------------------
 -- | Sends an HTTP POST request to a url.
 postURL url fields = withThrottle $ do
    shpider <- get
-   requestAndStore url $ opts shpider
+   cachedRequest url (opts shpider)
    where
     opts sh =
       [ CurlPostFields (map toPostField fields)
@@ -351,12 +349,30 @@ postURL url fields = withThrottle $ do
 
 ------------------------------------------------------------------------------
 -- |
-requestAndStore :: String -> [CurlOption] -> Shpider (ShpiderCode, Page)
-requestAndStore url opts = do
+cachedRequest :: String -> [CurlOption] -> Shpider (ShpiderCode, Page)
+cachedRequest url opts = getPageFile url >>= go
+  where
+    go Nothing = error "Trying to get a stored page without a directory!  This shouldn't happen"
+    go (Just file) = do
+        exists <- liftIO $ doesFileExist file
+        if exists then readCached file else requestAndStore file url opts
+
+    readCached file = do
+        liftIO $ putStrLn $ "Reading local copy of "++url
+        (storedUrl,rest) <- span (/='\n') `fmap` liftIO (readFile file)
+        when (storedUrl /= url) $ do
+            error "Access pattern doesn't match stored data.  You probably should delete the stored pages and re-run."
+        mkRes url (CurlOK, drop 1 rest)
+
+
+------------------------------------------------------------------------------
+-- |
+requestAndStore :: String -> String -> [CurlOption] -> Shpider (ShpiderCode, Page)
+requestAndStore file url opts = do
+    offline <- gets offlineMode
+    when offline $ error "Offline mode: no more cache, stopping."
     liftIO $ putStrLn $ "Requesting " ++ url
     contents <- liftIO $ curlGetString_ url opts
-    mfile <- getPageFile url
-    let write file = liftIO $ writeFile file
-            (unlines [url, snd contents])
-    maybe (return ()) write mfile
+    liftIO $ writeFile file (unlines [url, snd contents])
     mkRes url contents
+

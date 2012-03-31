@@ -27,6 +27,7 @@
 -- | This module provides all the settable options in shpider.
 module Network.Shpider.Options where
 
+import Control.Monad.State
 import Data.Maybe
 
 import Network.Curl.Opts

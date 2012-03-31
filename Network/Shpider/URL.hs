@@ -36,6 +36,7 @@ module Network.Shpider.URL
    ) 
    where
 
+import Control.Monad.State
 import Network.URL
 import Network.Shpider.State
 import Text.Regex.Posix

@@ -26,8 +26,7 @@
 
 -- | This module describes the state of shpider computations, and provides a monad transformer over it.
 module Network.Shpider.State 
-   ( module Control.Monad.State
-   , ShpiderState (..)
+   ( ShpiderState (..)
    , Page (..)
    , Shpider
    , emptyPage
@@ -35,7 +34,6 @@ module Network.Shpider.State
    , runShpiderSave
    , runShpiderSt
    , getPageFile
-   , getStoredPage
    )
    where
 
@@ -89,11 +87,10 @@ runShpider k = evalShpiderWith k initialSt
 
 -- | Run a Shpider computation and using the specified directory to save
 -- (or read if they exist) the pages from disk.
-runShpiderSave :: FilePath -> Shpider a -> IO a
-runShpiderSave pageDir k = do
+runShpiderSave :: Bool -> FilePath -> Shpider a -> IO a
+runShpiderSave offline pageDir k = do
     exists <- doesDirectoryExist pageDir
-    offline <- if exists then return True
-                         else createDirectory pageDir >> return False
+    unless exists $ createDirectory pageDir
     evalShpiderWith k $
         initialSt { offlineMode = offline
                   , pageSaveDir = Just pageDir
@@ -161,16 +158,4 @@ getPageFile url = runMaybeT $ do
         complete s = dir </> pad 3 s ++ ".html"
     lift $ complete `fmap` maybe nextPageCount return mname
 
-
-------------------------------------------------------------------------------
--- | Reads a stored page from disk.
-getStoredPage :: String -> Shpider String
-getStoredPage url = do
-    liftIO $ putStrLn $ "Reading local copy of "++url
-    name <- getPageFile url
-    when (isNothing name) $ error "Trying to get a stored page without a directory!  This shouldn't happen"
-    (storedUrl,rest) <- span (/='\n') `fmap` liftIO (readFile $ fromJust name)
-    when (storedUrl /= url) $ do
-        error "Access pattern doesn't match stored data.  You probably should delete the stored pages and re-run."
-    return $ drop 1 rest
 
