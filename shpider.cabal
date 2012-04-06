@@ -38,8 +38,8 @@ Library
     , regex-posix 
     , curl
     , directory       >= 1.0
-    , filepath        >= 1.2 && < 1.3
-    , tagsoup-parsec >= 0.0.8
+    , filepath        >= 1.2 && < 1.4
+    , tagsoup-parsec  >= 0.0.8
     , url>=2 
     , containers 
     , tagsoup 
