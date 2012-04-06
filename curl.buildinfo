@@ -1,6 +1,0 @@
--- curl.buildinfo.  Generated from curl.buildinfo.in by configure.
--- System-dependent values used by Distribution.Simple.defaultUserHooks
---
-buildable:  True
-cc-options: 
-ld-options: 

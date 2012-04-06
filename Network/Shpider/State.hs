@@ -26,26 +26,32 @@
 
 -- | This module describes the state of shpider computations, and provides a monad transformer over it.
 module Network.Shpider.State 
-   ( module Control.Monad.State
+   ( module Control.Monad.State.Strict
    , ShpiderState (..)
    , Page (..)
    , Shpider
    , emptyPage
    , runShpider
+   , runShpiderSave
    , runShpiderSt
+   , getPageFile
    )
    where
 
-import Control.Monad.State
+import           Control.Monad.State.Strict
+import           Control.Monad.Trans.Maybe
+import qualified Data.Map                   as M
+import           Data.Map                   (Map, (!))
+import           Data.Maybe
+import           Data.Time
+import           Data.Word
+import           Network.Curl
+import           Network.Shpider.Forms
+import           Network.Shpider.Links
+import           System.Directory
+import           System.FilePath.Posix
+import           Text.HTML.TagSoup.Parsec
 
-import Network.Shpider.Curl.Curl
-
-import Data.Maybe
-
-import Text.HTML.TagSoup.Parsec
-
-import Network.Shpider.Forms
-import Network.Shpider.Links
 
 -- | The shpider state holds all the options for shpider transactions, the current page and all the `CurlOption`s used when calling curl.
 data ShpiderState =
@@ -55,6 +61,15 @@ data ShpiderState =
       , curlOpts :: [ CurlOption ]
       , currentPage :: Page 
       , visited :: Maybe [ String ]
+      , downloadThrottle :: Maybe Int
+      -- ^ Whether to wait at least N micro-seconds between downloads
+      -- or form submissions. Defaults to 'Nothing'.
+      , lastDownloadTime :: !(Maybe UTCTime)
+
+      , pageFilenames :: Map String String
+      , offlineMode :: Bool
+      , pageSaveDir :: Maybe FilePath
+      , pageCount :: !Word64
       }
    deriving Show
 
@@ -69,9 +84,21 @@ runShpiderSt f =
 
 -- | Run a Shpider computation, returning the result.
 runShpider :: Shpider a -> IO a
-runShpider f = do
-   ( res , _ ) <- runShpiderSt f
-   return res
+runShpider k = evalShpiderWith k initialSt
+
+-- | Run a Shpider computation and using the specified directory to save
+-- (or read if they exist) the pages from disk.
+runShpiderSave :: Bool -> FilePath -> Shpider a -> IO a
+runShpiderSave offline pageDir k = do
+    exists <- doesDirectoryExist pageDir
+    unless exists $ createDirectory pageDir
+    evalShpiderWith k $
+        initialSt { offlineMode = offline
+                  , pageSaveDir = Just pageDir
+                  }
+
+evalShpiderWith :: Shpider a -> ShpiderState -> IO a
+evalShpiderWith k s = withCurlDo $ evalStateT k s
 
 -- | The initial shpider state.
 -- Currently, CurlTimeout is hard wired to 3, and cookies are saved in a file called "cookies".
@@ -85,6 +112,12 @@ initialSt =
                    ]
       , currentPage = emptyPage 
       , visited = Nothing 
+      , downloadThrottle = Nothing
+      , lastDownloadTime = Nothing
+      , pageFilenames = M.empty
+      , offlineMode = False
+      , pageSaveDir = Nothing
+      , pageCount = 0
       }
 
 -- | The Page datatype.  Holds `Link`s, `Form`s, the parsed [ `Tag` ], the page source, and the page's absolute URL.
@@ -106,3 +139,24 @@ emptyPage =
         , tags = []
         , addr =""
         }
+
+
+------------------------------------------------------------------------------
+-- | Gets and increments the next page count.
+nextPageCount = do
+    next <- gets pageCount
+    modify (\s -> s { pageCount = pageCount s + 1 })
+    return $ show next
+
+
+------------------------------------------------------------------------------
+-- | Gets the filename for a stored page.
+getPageFile :: String -> Shpider (Maybe FilePath)
+getPageFile url = runMaybeT $ do
+    dir <- MaybeT $ gets pageSaveDir
+    mname <- lift $ gets (M.lookup url . pageFilenames)
+    let pad len s = replicate (len - length s) '0' ++ s
+        complete s = dir </> pad 3 s ++ ".html"
+    lift $ complete `fmap` maybe nextPageCount return mname
+
+

@@ -41,14 +41,18 @@ module Network.Shpider
    , module Network.Shpider.Options
    , module Network.Shpider.Forms
    , module Network.Shpider.Links
+   -- * Crawl Functions
    , download
    , sendForm
+   -- * Basic Parsing/Decision Support
    , getLinksByText
    , getLinksByTextRegex
    , getLinksByAddressRegex
    , getFormsByAction
+   , getFormsHasAction
    , currentLinks
    , currentForms
+   -- * Utilities
    , parsePage
    , isAuthorizedDomain
    , withAuthorizedDomain
@@ -56,22 +60,24 @@ module Network.Shpider
    ) 
    where
 
-import Network.Shpider.Curl.Curl 
+import           Control.Concurrent
+import           Control.Monad.State
+import qualified Data.Map                as M
+import           Data.Maybe
+import           Data.Time
+import           Network.Curl
+import           Network.Shpider.Code
+import           Network.Shpider.Forms
+import           Network.Shpider.Links
+import           Network.Shpider.Options
+import           Network.Shpider.State
+import           Network.Shpider.URL
+import           System.Directory
+import           Text.HTML.TagSoup
+import           Text.HTML.TagSoup
+import           Text.Regex.Posix
+import           Web.Encodings
 
-import Text.HTML.TagSoup
-import Text.Regex.Posix
-
-import qualified Data.Map as M
-import Data.Maybe
-
-import Text.HTML.TagSoup
-
-import Network.Shpider.State
-import Network.Shpider.URL
-import Network.Shpider.Code
-import Network.Shpider.Options
-import Network.Shpider.Forms
-import Network.Shpider.Links
 
 -- | if `keepTrack` has been set, then haveVisited will return `True` if the given URL has been visited.
 haveVisited :: String -> Shpider Bool
@@ -117,11 +123,42 @@ parsePage paddr html = do
    setCurrentPage newP
    return newP
 
-curlDownload url = do
-   shpider <- get
-   res <- liftIO $ curlGetString url $ curlOpts shpider
-   r <- mkRes url res
-   return r
+
+-------------------------------------------------------------------------------
+-- | Perform the given operation subject to blocking throttling based
+-- on the last time there was a download.
+withThrottle :: Shpider a -> Shpider a
+withThrottle f = do
+  let perform = do
+        res <- f
+        sh <- get
+        now <- liftIO $ getCurrentTime
+        put $ sh { lastDownloadTime = Just now }
+        return res
+  thOpt <- gets downloadThrottle
+  lastD <- gets lastDownloadTime
+  case thOpt of
+    Nothing -> perform
+    Just n -> do
+      case lastD of 
+        Nothing -> perform
+        Just ld -> do
+          th <- liftIO $ shouldThrottle n ld
+          case th of
+            Just x -> liftIO (threadDelay x) >> perform
+            Nothing -> perform
+            
+
+-------------------------------------------------------------------------------
+-- | Test whether we need to throttle
+shouldThrottle :: Int -> UTCTime -> IO (Maybe Int)
+shouldThrottle n lastTime = do
+  now <- getCurrentTime
+  let n' = fromIntegral n / 1000000
+      diff = diffUTCTime now lastTime
+      delta = round . (* 1000000) $ n' - diff
+  return $  if delta > 0 then (Just delta) else Nothing
+
 
 mkRes url ( curlCode , html ) = do
    p <- if curlCode == CurlOK
@@ -132,22 +169,14 @@ mkRes url ( curlCode , html ) = do
    return ( ccToSh curlCode , p )
 
 
-curlDownloadPost url fields = do
-   shpider <- get
-   res <- liftIO $ curlGetString url $ CurlPostFields ( map toPostField fields ) : curlOpts shpider
-   mkRes url res
-
-
-curlDownloadHead urlStr = do
-   shpider <- get
-   liftIO $ curlHead urlStr $ curlOpts shpider
-
+validContentType :: String -> Bool
 validContentType ct =
    or $ map ( \ htmlct ->
                  ct =~ htmlct
             )
             htmlContentTypes
 
+htmlContentTypes :: [String]
 htmlContentTypes =
    [ "text/html"
    , "application/xhtml+xml"
@@ -179,28 +208,29 @@ download messyUrl = do
          return ( UnsupportedProtocol , emptyPage )
 
 
+downloadAPage :: String -> Shpider (ShpiderCode, Page)
 downloadAPage url = do
-   shpider <- get
+   shpider <- get 
    if htmlOnlyDownloads shpider
       then do
          if isHttp url
             then do
-               ( _ , headers ) <- curlDownloadHead url
-               let maybeContentType =
-                      lookup "Content-Type" headers
-               maybe ( curlDownload url )
-                     ( \ ct -> do
-                          if validContentType ct 
+               response <- withThrottle $ liftIO $
+                  curlGetResponse_ url (curlOpts shpider)
+               maybe ( mkRes url (respCurlCode response, respBody response))
+                     ( \ ct ->
+                          if validContentType ct
                              then
-                                curlDownload url
+                                mkRes url (CurlOK, respBody response)
                              else
-                                return ( WrongData , emptyPage )
+                                return (WrongData, emptyPage)
                      )
-                     maybeContentType
+                     (lookup ("Content-Type" :: String) $ respHeaders response)
             else
-               curlDownload url
+               getURL url
       else
-         curlDownload url
+         getURL url
+
 
 -- | withAuthorizedDomain will execute the function if the url given is an authorized domain.
 -- See `isAuthorizedDomain`.
@@ -231,14 +261,14 @@ sendForm form = do
                                                  ) 
                                                  u
                                                  ( M.toList $ inputs form )
-                    curlDownload addr
+                    getURL addr
                  POST ->
-                    curlDownloadPost absAddr $ M.toList $ inputs form          
+                    postURL absAddr $ M.toList $ inputs form          
          )
          mabsAddr
    
 toPostField ( name , value ) =
-   name ++ "=" ++ value
+   encodeUrl name ++ "=" ++ encodeUrl value
 
 -- | Return the links on the current page.
 currentLinks :: Shpider [ Link ]
@@ -284,9 +314,65 @@ getFormsByAction a = do
          ( \ url -> fmap (filter $ (==) url . action) currentForms )
          murl
 
+getFormsHasAction :: (String -> Bool) -> Shpider [Form] 
+getFormsHasAction f = fmap (filter $ f . action ) currentForms
+  
+
 -- | Get all links whose address matches this regex.
 getLinksByAddressRegex :: String -> Shpider [ Link ]
 getLinksByAddressRegex r = do
    cls <- currentLinks
    return $ filter ( flip (=~) r . linkAddress )
                    cls
+
+
+------------------------------------------------------------------------------
+-- | Gets the contents of the page at the specified URL.  If currently in
+-- offline mode, then the file is read from disk.  Otherwise it is downloaded.
+getURL :: String -> Shpider (ShpiderCode, Page)
+getURL url = withThrottle $ do
+    shpider <- get
+    cachedRequest url (curlOpts shpider)
+
+
+------------------------------------------------------------------------------
+-- | Sends an HTTP POST request to a url.
+postURL url fields = withThrottle $ do
+   shpider <- get
+   cachedRequest url (opts shpider)
+   where
+    opts sh =
+      [ CurlPostFields (map toPostField fields)
+      , CurlPost True
+      ] ++ curlOpts sh
+
+
+------------------------------------------------------------------------------
+-- |
+cachedRequest :: String -> [CurlOption] -> Shpider (ShpiderCode, Page)
+cachedRequest url opts = getPageFile url >>= go
+  where
+    go Nothing = error "Trying to get a stored page without a directory!  This shouldn't happen"
+    go (Just file) = do
+        exists <- liftIO $ doesFileExist file
+        if exists then readCached file else requestAndStore file url opts
+
+    readCached file = do
+        liftIO $ putStrLn $ "Reading local copy of "++url
+        (storedUrl,rest) <- span (/='\n') `fmap` liftIO (readFile file)
+        when (storedUrl /= url) $ do
+            error "Access pattern doesn't match stored data.  You probably should delete the stored pages and re-run."
+        mkRes url (CurlOK, drop 1 rest)
+
+
+------------------------------------------------------------------------------
+-- |
+requestAndStore :: String -> String -> [CurlOption] -> Shpider (ShpiderCode, Page)
+requestAndStore file url opts = do
+    offline <- gets offlineMode
+    when offline $ error "Offline mode: no more cache, stopping."
+    liftIO $ putStrLn $ "Requesting " ++ url
+    contents <- liftIO $ curlGetString_ url opts
+    liftIO $ writeFile file (unlines [url, snd contents])
+    mkRes url contents
+

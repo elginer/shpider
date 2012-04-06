@@ -27,10 +27,11 @@
 -- | This module provides all the settable options in shpider.
 module Network.Shpider.Options where
 
+import Control.Monad.State
 import Data.Maybe
 
-import Network.Shpider.Curl.Opts
-import Network.Shpider.Curl.Types
+import Network.Curl.Opts
+import Network.Curl.Types
 
 import Network.Shpider.State
 import Network.Shpider.URL
@@ -116,3 +117,26 @@ keepTrack :: Shpider ( )
 keepTrack = do
    shpider <- get
    put $ shpider { visited = Just [ ] }
+
+
+-- | Add CURL options to Shpider
+addCurlOpts :: [CurlOption] -> Shpider ()
+addCurlOpts opts = do
+  shpider <- get
+  put $ shpider { curlOpts = opts ++ curlOpts shpider }
+  
+
+-- | Set Shpider's CURL options from scratch
+setCurlOpts :: [CurlOption] -> Shpider ()
+setCurlOpts opts = do
+  shpider <- get
+  put $ shpider { curlOpts = opts}
+  
+
+-- | Set download throttling, so that subsequent calls to 'download'
+-- or 'sendForm' block, making sure at least N micro-seconds pass.
+-- Passing a "Nothing" would disable any throttling.
+setThrottle :: Maybe Int -> Shpider ()
+setThrottle n = do
+  sh <- get
+  put $ sh { downloadThrottle = n}
