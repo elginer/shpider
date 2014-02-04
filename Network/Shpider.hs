@@ -24,17 +24,30 @@
  -
 -}
 
-{-# OPTIONS -XScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- | This module exposes the main functionality of shpider
 -- It allows you to quickly write crawlers, and for simple cases even without reading the page source eg.
 --
 -- @
--- `runShpider` $ do
---    `download` \"http:\/\/hackage.haskell.org\/packages\/archive\/pkg-list.html\"
---    l : _ <- `getLinksByText` \"shpider\"
---    `download` $ linkAddress l
+--
+-- #!/usr/bin/env runhaskell
+--
+-- module ShpiderTest where
+--
+-- import Network.Shpider hiding (get)
+-- import Network.Shpider.Curl.Opts
+--
+-- main = do
+--  (result, page) <- `runShpiderWithOptions` [CurlUserAgent \"Windows Mozilla\"] $ do
+--    `download` \"http://browser.yellosoft.us/text.php\"
+--
+--  case result of
+--    Ok -> putStrLn \"Ok\"
+--    _ -> putStrLn \"Error\"
+--
+--  putStrLn $ `source` page
 -- @
-module Network.Shpider 
+module Network.Shpider
    ( module Network.Shpider.Code
    , module Network.Shpider.State
    , module Network.Shpider.URL
@@ -47,6 +60,7 @@ module Network.Shpider
    , getLinksByTextRegex
    , getLinksByAddressRegex
    , getFormsByAction
+   , getFormsByRegex
    , currentLinks
    , currentForms
    , parsePage
@@ -64,8 +78,6 @@ import Text.Regex.Posix
 import qualified Data.Map as M
 import Data.Maybe
 
-import Text.HTML.TagSoup
-
 import Network.Shpider.State
 import Network.Shpider.URL
 import Network.Shpider.Code
@@ -77,32 +89,27 @@ import Network.Shpider.Links
 haveVisited :: String -> Shpider Bool
 haveVisited uncleanUrl = do
    murl <- mkAbsoluteUrl uncleanUrl
-   maybe ( return False )
-         ( \ url -> do
-              shpider <- get
-              return $ maybe False 
-                             ( \ vs ->
-                                  elem url vs
-                             )
-                             ( visited shpider )
-         )
-         murl
+   maybe (return False) (\url -> do
+         shpider <- get
+         return $ maybe False (elem url) (visited shpider)
+      )
+      murl
 
 -- | Parse a given URL and source html into the `Page` datatype.
 -- This will set the current page.
 parsePage :: String -> String -> Shpider Page
 parsePage paddr html = do
-   let ts =
-          parseTags html
-       ls =
-          gatherLinks ts
-       fs =
-          gatherForms ts
+   let ts = parseTags html
+       ls = gatherLinks ts
+       fs = gatherForms ts
        nPge = emptyPage { addr = paddr }
+
    -- seems weird, but this is the side effect needed here to create the absolute urls next
    setCurrentPage nPge
-   maybeAbsFormActions <- mapM mkAbsoluteUrl $ map action fs 
-   maybeAbsLinkAddrs <- mapM mkAbsoluteUrl $ map linkAddress ls
+
+   maybeAbsFormActions <- (mapM mkAbsoluteUrl . map action) fs
+   maybeAbsLinkAddrs <- (mapM mkAbsoluteUrl . map linkAddress) ls
+
    let absLinkAddrs = catMaybes maybeAbsLinkAddrs
        absFormActions = catMaybes maybeAbsFormActions
        absFs = zipWith ( \ form a -> form { action = a }) fs absFormActions 
@@ -119,9 +126,8 @@ parsePage paddr html = do
 
 curlDownload url = do
    shpider <- get
-   res <- liftIO $ curlGetString url $ curlOpts shpider
-   r <- mkRes url res
-   return r
+   res <- (liftIO . curlGetString url . curlOpts) shpider
+   mkRes url res
 
 mkRes url ( curlCode , html ) = do
    p <- if curlCode == CurlOK
@@ -131,114 +137,87 @@ mkRes url ( curlCode , html ) = do
               return emptyPage
    return ( ccToSh curlCode , p )
 
-
 curlDownloadPost url fields = do
    shpider <- get
    res <- liftIO $ curlGetString url $ CurlPostFields ( map toPostField fields ) : curlOpts shpider
    mkRes url res
 
-
 curlDownloadHead urlStr = do
    shpider <- get
-   liftIO $ curlHead urlStr $ curlOpts shpider
+   (liftIO . curlHead urlStr . curlOpts) shpider
 
-validContentType ct =
-   or $ map ( \ htmlct ->
-                 ct =~ htmlct
-            )
-            htmlContentTypes
+validContentType ct = any (\htmlct -> ct =~ htmlct) htmlContentTypes
 
-htmlContentTypes =
-   [ "text/html"
-   , "application/xhtml+xml"
-   ]
+htmlContentTypes = ["text/html", "application/xhtml+xml"]
 
 -- | Fetch whatever is at this address, and attempt to parse the content into a Page. 
 -- Return the status code with the parsed content.
 download :: String -> Shpider ( ShpiderCode , Page )
 download messyUrl = do
    shpider <- get
+
    let maybeWrite u =
-          maybe ( return ( ) )
-                ( \ vs ->
-                     put $ shpider { visited = Just $ u : vs }
-                )
-                ( visited shpider ) 
+          maybe (return ())
+                (\vs -> put $ shpider { visited = Just $ u : vs })
+                (visited shpider)
+
    if not $ isMailto messyUrl
-      then do 
+      then do
          murl <- mkAbsoluteUrl messyUrl
-         maybe ( return ( InvalidURL , emptyPage ) )
-               ( \ url -> withAuthorizedDomain url $ do
-                    res@( c , page ) <- downloadAPage url
+
+         maybe (return (InvalidURL, emptyPage))
+               (\url -> withAuthorizedDomain url $ do
+                    res@(c, page) <- downloadAPage url
                     maybeWrite $ addr page 
                     return res
                )
                murl
       else do
          maybeWrite messyUrl --if it's mail we want to write it so we don't try it again
-         return ( UnsupportedProtocol , emptyPage )
-
+         return (UnsupportedProtocol, emptyPage)
 
 downloadAPage url = do
    shpider <- get
-   if htmlOnlyDownloads shpider
+   if htmlOnlyDownloads shpider && isHttp url
       then do
-         if isHttp url
-            then do
-               ( _ , headers ) <- curlDownloadHead url
-               let maybeContentType =
-                      lookup "Content-Type" headers
-               maybe ( curlDownload url )
-                     ( \ ct -> do
-                          if validContentType ct 
-                             then
-                                curlDownload url
-                             else
-                                return ( WrongData , emptyPage )
-                     )
-                     maybeContentType
-            else
-               curlDownload url
-      else
-         curlDownload url
+         (_ , headers) <- curlDownloadHead url
+         let maybeContentType = lookup "Content-Type" headers
+
+         maybe (curlDownload url)
+               (\ct -> if validContentType ct
+                    then curlDownload url
+                    else return (WrongData, emptyPage)
+               )
+               maybeContentType
+      else curlDownload url
 
 -- | withAuthorizedDomain will execute the function if the url given is an authorized domain.
 -- See `isAuthorizedDomain`.
 withAuthorizedDomain :: String -> Shpider ( ShpiderCode , Page ) -> Shpider ( ShpiderCode , Page )
 withAuthorizedDomain url f = do
    shpider <- get
-   if dontLeaveDomain shpider
-      then do
-         let d = startPage shpider 
-         if isSameDomain d url 
-            then
-               f
-            else
-               return ( OffSite , emptyPage )
-      else
-         f
+
+   if dontLeaveDomain shpider && not (isSameDomain (startPage shpider) url)
+      then return (OffSite, emptyPage)
+      else f
 
 -- | Send a form to the URL specified in its action attribute
 sendForm :: Form -> Shpider ( ShpiderCode , Page )
 sendForm form = do
-   mabsAddr <- mkAbsoluteUrl $ action form
-   maybe ( return (InvalidURL , emptyPage ) )
-         ( \ absAddr -> withAuthorizedDomain absAddr $ do
-              case method form of
-                 GET -> do
-                    let Just u = importURL addr -- we can do the indisputable pattern match because mkAbsoluteUrl already calls importURL
-                        addr = exportURL $ foldl ( \ a i -> add_param a i
-                                                 ) 
-                                                 u
-                                                 ( M.toList $ inputs form )
-                    curlDownload addr
-                 POST ->
-                    curlDownloadPost absAddr $ M.toList $ inputs form          
+   mabsAddr <- (mkAbsoluteUrl . action) form
+   maybe (return (InvalidURL, emptyPage))
+         (\absAddr -> withAuthorizedDomain absAddr $ case method form of
+              GET -> do
+                 let Just u = importURL addr -- we can do the indisputable pattern match because mkAbsoluteUrl already calls importURL
+                     addr = exportURL $ foldl add_param u (M.toList $ inputs form)
+
+                 curlDownload addr
+              POST -> curlDownloadPost absAddr $ M.toList $ inputs form          
          )
+
          mabsAddr
-   
-toPostField ( name , value ) =
-   name ++ "=" ++ value
+
+toPostField (name, value) = name ++ "=" ++ value
 
 -- | Return the links on the current page.
 currentLinks :: Shpider [ Link ]
@@ -283,6 +262,12 @@ getFormsByAction a = do
    maybe ( return [ ] )
          ( \ url -> fmap (filter $ (==) url . action) currentForms )
          murl
+
+-- | Get all forms whose action matches this regex.
+getFormsByRegex :: String -> Shpider [ Form ]
+getFormsByRegex r = do
+	frs <- currentForms
+	return $ filter ( flip (=~) r . action) frs
 
 -- | Get all links whose address matches this regex.
 getLinksByAddressRegex :: String -> Shpider [ Link ]

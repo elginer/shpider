@@ -1,5 +1,4 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
-{-# OPTIONS -fvia-C -#include "curl/curl.h" #-}
 --------------------------------------------------------------------
 -- |
 -- Module    : Network.Curl.Info
@@ -60,7 +59,7 @@ data Info
  | CookieList
  | LastSocket
  | FtpEntryPath
-   deriving (Show,Enum,Bounded)
+ deriving (Show,Enum,Bounded)
 
 data InfoValue
  = IString String
@@ -69,12 +68,11 @@ data InfoValue
  | IList   [String]
 
 instance Show InfoValue where
-   show k = 
-     case k of
-       IString s -> s
-       ILong l   -> show l
-       IDouble d -> show d
-       IList ss  -> show ss
+   show k = case k of
+     IString s -> s
+     ILong l   -> show l
+     IDouble d -> show d
+     IList ss  -> show ss
 
 stringTag :: Long
 stringTag = 0x100000  -- CURLINFO_STRING
@@ -97,8 +95,7 @@ infoTypeMask = 0xf00000  -- CURLINFO_TYPEMASK
 -}
 
 getInfo :: Curl -> Info -> IO InfoValue
-getInfo h i = do
- case i of
+getInfo h i = case i of
    EffectiveUrl -> getInfoStr h (show i) 1
    ResponseCode -> getInfoLong h (show i) 2
    TotalTime    -> getInfoDouble h (show i) 3
@@ -131,47 +128,48 @@ getInfo h i = do
    FtpEntryPath -> getInfoStr h (show i) 30
 
 getInfoStr :: Curl -> String -> Long -> IO InfoValue
-getInfoStr h loc tg =
-     alloca $ \ ps -> do
-        rc <- curlPrim h $ \_ p -> easy_getinfo_str p tg ps
-        case rc of
-          0 -> do
-             s <- peek ps
-             if s == nullPtr
-              then return (IString "")
-              else liftM IString $ peekCString s
-          _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
+getInfoStr h loc tg = alloca $ \ps -> do
+   rc <- curlPrim h $ \_ p -> easy_getinfo_str p tg ps
+
+   case rc of
+     0 -> do
+        s <- peek ps
+
+        if s == nullPtr
+          then return (IString "")
+          else liftM IString $ peekCString s
+     _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
 
 getInfoLong :: Curl -> String -> Long -> IO InfoValue
-getInfoLong h loc tg =
-     alloca $ \ pl -> do
-        rc <- curlPrim h $ \_ p -> easy_getinfo_long p tg pl
-        case rc of
-          0 -> do
-             l <- peek pl
-             return (ILong l)
-          _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
+getInfoLong h loc tg = alloca $ \ pl -> do
+   rc <- curlPrim h $ \_ p -> easy_getinfo_long p tg pl
+
+   case rc of
+     0 -> do
+        l <- peek pl
+        return (ILong l)
+     _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
 
 getInfoDouble :: Curl -> String -> Long -> IO InfoValue
-getInfoDouble h loc tg =
-     alloca $ \ pd -> do
-        rc <- curlPrim h $ \_ p -> easy_getinfo_double p tg pd
-        case rc of
-          0 -> do
-             d <- peek pd
-             return (IDouble d)
-          _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
+getInfoDouble h loc tg = alloca $ \ pd -> do
+   rc <- curlPrim h $ \_ p -> easy_getinfo_double p tg pd
+
+   case rc of
+     0 -> do
+        d <- peek pd
+        return (IDouble d)
+     _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
 
 getInfoSList :: Curl -> String -> Long -> IO InfoValue
-getInfoSList h loc tg =
-     alloca $ \ ps -> do
-        rc <- curlPrim h $ \_ p -> easy_getinfo_slist p tg ps
-        case rc of
-          0 -> do
-             p <- peek ps
-             ls <- unmarshallList p
-             return (IList ls)
-          _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
+getInfoSList h loc tg = alloca $ \ ps -> do
+   rc <- curlPrim h $ \_ p -> easy_getinfo_slist p tg ps
+
+   case rc of
+     0 -> do
+        p <- peek ps
+        ls <- unmarshallList p
+        return (IList ls)
+     _ -> fail ("getInfo{"++loc ++ "}: " ++ show (toCode rc))
  where
    unmarshallList ptr 
      | ptr == nullPtr = return []
@@ -183,14 +181,10 @@ getInfoSList h loc tg =
          return (s:ls)
 
 -- FFI decls
-foreign import ccall
-  "curl_easy_getinfo_long" easy_getinfo_long :: CurlH -> Long -> Ptr Long -> IO CInt
+foreign import ccall "curl_easy_getinfo_long" easy_getinfo_long :: CurlH -> Long -> Ptr Long -> IO CInt
 
-foreign import ccall
-  "curl_easy_getinfo_string" easy_getinfo_str  :: CurlH -> Long -> Ptr CString -> IO CInt
+foreign import ccall "curl_easy_getinfo_string" easy_getinfo_str  :: CurlH -> Long -> Ptr CString -> IO CInt
 
-foreign import ccall
-  "curl_easy_getinfo_double" easy_getinfo_double :: CurlH -> Long -> Ptr Double -> IO CInt
+foreign import ccall "curl_easy_getinfo_double" easy_getinfo_double :: CurlH -> Long -> Ptr Double -> IO CInt
 
-foreign import ccall
-  "curl_easy_getinfo_slist" easy_getinfo_slist :: CurlH -> Long -> Ptr (Ptr (Ptr CChar)) -> IO CInt
+foreign import ccall "curl_easy_getinfo_slist" easy_getinfo_slist :: CurlH -> Long -> Ptr (Ptr (Ptr CChar)) -> IO CInt

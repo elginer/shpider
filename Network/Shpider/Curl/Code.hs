@@ -1,5 +1,3 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
-{-# OPTIONS -fvia-C -#include "curl/curl.h" #-}
 --------------------------------------------------------------------
 -- |
 -- Module    : Network.Curl.Code
@@ -103,7 +101,7 @@ data CurlCode
  | CurlAgain
  | CurlSSLCRLBadFile
  | CurlSSLIssuerError
-   deriving ( Eq, Show, Enum )
+ deriving (Eq, Show, Enum)
 
 toCode :: CInt -> CurlCode
-toCode x = toEnum (fromIntegral x)
+toCode = toEnum . fromIntegral

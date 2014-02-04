@@ -1,5 +1,6 @@
 {-
  -
+ - Copyright (c) 2011 Andrew Pennebaker
  - Copyright (c) 2009-2010 Johnny Morrice
  -
  - Permission is hereby granted, free of charge, to any person
@@ -25,7 +26,7 @@
 -}
 
 -- | This module describes the state of shpider computations, and provides a monad transformer over it.
-module Network.Shpider.State 
+module Network.Shpider.State
    ( module Control.Monad.State
    , ShpiderState (..)
    , Page (..)
@@ -33,6 +34,9 @@ module Network.Shpider.State
    , emptyPage
    , runShpider
    , runShpiderSt
+   , runShpiderStWithOptions
+   , runShpiderWithOptions
+   , initialSt
    )
    where
 
@@ -53,7 +57,7 @@ data ShpiderState =
       , startPage :: String
       , dontLeaveDomain :: Bool
       , curlOpts :: [ CurlOption ]
-      , currentPage :: Page 
+      , currentPage :: Page
       , visited :: Maybe [ String ]
       }
    deriving Show
@@ -71,6 +75,17 @@ runShpiderSt f =
 runShpider :: Shpider a -> IO a
 runShpider f = do
    ( res , _ ) <- runShpiderSt f
+   return res
+
+-- | Run a Shpider computation with otions, returning the result with the state.
+runShpiderStWithOptions :: ShpiderState -> Shpider a -> IO ( a , ShpiderState )
+runShpiderStWithOptions state f =
+   withCurlDo $ runStateT f state
+
+-- | Run a Shpider computation with options, returning the result.
+runShpiderWithOptions :: [ CurlOption ] -> Shpider a -> IO a
+runShpiderWithOptions options f = do
+   ( res , _ ) <- runShpiderStWithOptions (initialSt { curlOpts = options }) f
    return res
 
 -- | The initial shpider state.

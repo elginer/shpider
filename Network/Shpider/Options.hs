@@ -40,52 +40,41 @@ import Network.Shpider.TextUtils
 stayOnDomain :: Bool -> Shpider ( )
 stayOnDomain b = do
    shpider <- get
-   put $ shpider { dontLeaveDomain =
-                      b
-                 }
+   put $ shpider { dontLeaveDomain = b }
 
 -- | Set the CurlTimeout option.  Requests will TimeOut after this number of seconds.
 setTimeOut :: Long -> Shpider ( )
 setTimeOut s = do
    shpider <- get
+
    let isTimeout c =
           case c of
-             ( CurlTimeout _ ) ->
-                True
-             _ ->
-                False
-       timeoutPresent =
-          not $ null $ filter isTimeout $ curlOpts shpider
+             (CurlTimeout _) -> True
+             _ -> False
+
+       timeoutPresent = any isTimeout $ curlOpts shpider
+
    put $ shpider { curlOpts =
                       if not timeoutPresent
-                         then
-                            CurlTimeout s : curlOpts shpider
-                         else
-                            map ( \ c ->
-                                     if isTimeout c
-                                        then
-                                           CurlTimeout s
-                                        else
-                                           c
+                         then CurlTimeout s : curlOpts shpider
+                         else map (\c -> if isTimeout c
+                                        then CurlTimeout s
+                                        else c
                                 )
-                                ( curlOpts shpider )
-                 }  
+                                (curlOpts shpider)
+                 }
 
 -- | Set the start page of your shpidering antics.
 -- The start page must be an absolute URL, if not, this will raise an error.
 setStartPage :: String -> Shpider ( )
 setStartPage uncleanUrl = do
    shpider <- get
+
    if isAbsoluteUrl url
-      then         
-         put $ shpider { startPage =
-                            url 
-                       }
-      else
-         error "The start page must be an absolute URL"
+      then put $ shpider { startPage = url }
+      else error "The start page must be an absolute URL"
    where
-   url =
-      escapeSpaces uncleanUrl
+      url = escapeSpaces uncleanUrl
 
 -- | Return the starting URL, as set by `setStartPage`
 getStartPage :: Shpider String
@@ -115,4 +104,4 @@ getCurrentPage = do
 keepTrack :: Shpider ( )
 keepTrack = do
    shpider <- get
-   put $ shpider { visited = Just [ ] }
+   put $ shpider { visited = Just [] }

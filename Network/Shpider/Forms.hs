@@ -68,10 +68,7 @@ data Form =
 --    \"message\" =: \"Nice syntax dewd.\"
 -- @
 fillOutForm :: Form -> [ ( String , String ) ] -> Form
-fillOutForm f is =
-   foldl ( \ form ( n , v ) -> form { inputs = M.insert n v $ inputs form } )
-         f
-         is
+fillOutForm = foldl (\form (n, v) -> form { inputs = M.insert n v $ inputs form })
 
 -- | The first argument is the action attribute of the form, the second is the method attribute, and the third are the inputs.
 mkForm :: String -> Method -> [ ( String , String ) ] -> Form
@@ -98,7 +95,7 @@ toForm ( TagOpen _ attrs , innerTags , _ ) = do
    a <- attrLookup "action" attrs
    let is = tParse ( allOpenTags "input" ) innerTags
        tas = tParse ( allWholeTags "textarea" ) innerTags
-   Just $ Form { inputs = M.fromList $ mapMaybe inputNameValue is ++ mapMaybe textAreaNameValue tas
+   Just Form { inputs = M.fromList $ mapMaybe inputNameValue is ++ mapMaybe textAreaNameValue tas
                , action = a
                , method = m
                }
